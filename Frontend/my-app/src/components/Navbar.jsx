@@ -1,39 +1,38 @@
-// src/components/Navbar.jsx
-
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { FaSignInAlt } from 'react-icons/fa';
 
 const Navbar = () => {
   const linkClasses = "text-gray-300 hover:text-white transition-colors duration-300";
-  const activeLinkClasses = "text-indigo-400 font-semibold"; // Active link style
+  const activeLinkClasses = "text-indigo-400 font-semibold";
 
-  const scrollToSection = (id) => {
-    const element = document.getElementById(id);
-if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleScrollLink = (sectionId) => {
+    // If we are already on the homepage, just scroll
+    if (location.pathname === '/') {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      // If we are on another page, navigate to the homepage with a hash
+      // The Dashboard component will handle the scrolling
+      navigate(`/#${sectionId}`);
     }
   };
 
   return (
     <nav className="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-sm shadow-lg">
       <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-        {/* Logo */}
         <NavLink to="/" className="text-2xl font-bold text-white uppercase tracking-widest">
           Replic AI
         </NavLink>
-
-        {/* Navigation Links */}
         <div className="hidden md:flex space-x-8 items-center font-medium">
-          {/* --- ADDED THIS HOME LINK --- */}
-          <NavLink to="/" className={({ isActive }) => isActive ? activeLinkClasses : linkClasses}>Home</NavLink>
-          
-          <a href="/#features" onClick={(e) => { e.preventDefault(); scrollToSection('features'); }} className={linkClasses}>Features</a>
-          <a href="/#about" onClick={(e) => { e.preventDefault(); scrollToSection('about'); }} className={linkClasses}>About</a>
-          <NavLink to="/history" className={({ isActive }) => isActive ? activeLinkClasses : linkClasses}>Analytics</NavLink>
+          <NavLink to="/" className={({ isActive }) => isActive && location.hash === '' ? activeLinkClasses : linkClasses}>Home</NavLink>
+          <button onClick={() => handleScrollLink('features')} className={linkClasses}>Features</button>
+          <button onClick={() => handleScrollLink('about')} className={linkClasses}>About</button>
+          <NavLink to="/history" className={({ isActive }) => isActive ? activeLinkClasses : linkClasses}>History</NavLink>
+          <NavLink to="/progress" className={({ isActive }) => isActive ? activeLinkClasses : linkClasses}>Progress</NavLink>
         </div>
-
-        {/* Login Button */}
         <button className="flex items-center text-white px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition-all duration-300 transform hover:scale-105">
           <FaSignInAlt className="mr-2" />
           Login
