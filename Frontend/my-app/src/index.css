@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+@keyframes animate-lines {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
+/* === NEW AND IMPROVED BACKGROUND === */
+.animated-gradient-lines-dark {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 200px,
+    rgba(37, 99, 235, 0.25) 201px, /* Blue line */
+    rgba(37, 99, 235, 0.25) 202px,
+    transparent 203px,
+    transparent 400px,
+    rgba(16, 185, 129, 0.25) 401px, /* Green line */
+    rgba(16, 185, 129, 0.25) 402px
+  );
+  background-size: 200% 200%; /* Make it large to animate */
+  animation: animate-lines 25s linear infinite;
+}
