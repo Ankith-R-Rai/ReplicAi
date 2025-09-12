@@ -1,14 +1,26 @@
-// src/pages/Dashboard.jsx
-
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import Card from '../components/Card'; // Make sure this import is here
+import Card from '../components/Card';
 import { VscHistory } from 'react-icons/vsc';
 import { GoGoal } from 'react-icons/go';
 import { LuSquarePlay } from 'react-icons/lu';
 import { FaDumbbell, FaChartLine, FaUsers } from 'react-icons/fa';
 
 function Dashboard() {
+  const location = useLocation();
+
+  // This effect runs when the page loads or when the URL hash changes (e.g., from /#features)
+  useEffect(() => {
+    if (location.hash) {
+      const elementId = location.hash.substring(1);
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [location]);
+
   return (
     <div>
       {/* Hero Section */}
@@ -20,7 +32,7 @@ function Dashboard() {
         </Link>
       </div>
 
-      {/* --- CARDS RESTORED HERE --- */}
+      {/* Card Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card title="Start New Session" icon={<LuSquarePlay size={24} />}>
           <p className="mb-4">Begin a new workout and get live feedback on your form.</p>
@@ -40,7 +52,7 @@ function Dashboard() {
         </Card>
       </div>
 
-      {/* Core Features Section (pushed down) */}
+      {/* Core Features Section */}
       <section id="features" className="mt-40 pt-12">
         <h2 className="text-3xl font-semibold text-center mb-10 text-gray-200">Core Features</h2>
         <div className="grid md:grid-cols-3 gap-8 text-center text-gray-300">
@@ -66,7 +78,7 @@ function Dashboard() {
       <section id="about" className="mt-16 pt-12 text-center">
         <h2 className="text-3xl font-semibold mb-8 text-gray-200">About Replic AI</h2>
         <p className="max-w-3xl mx-auto text-gray-400 leading-relaxed">
-          Replic AI is your personal AI workout companion...
+          Replic AI is your personal AI workout companion. We leverage cutting-edge computer vision to provide real-time feedback, ensuring every rep you perform is safe and effective. Our mission is to make expert-level fitness guidance accessible to everyone.
         </p>
       </section>
     </div>
