@@ -21,3 +21,22 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Python
+venv/
+Logic/venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+
+# Node / React
+node_modules/
+build/
+dist/
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
