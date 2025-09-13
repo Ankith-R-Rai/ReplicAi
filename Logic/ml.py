@@ -24,7 +24,7 @@ pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 # --- The Upgraded Tracker with More Detailed State ---
 class ExerciseTracker:
     # --- FIXED: Corrected the typo from init to _init_ ---
-    def _init_(self):
+    def __init__(self):
         """Initializes the tracker's state."""
         self.reset()
 
