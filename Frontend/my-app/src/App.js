@@ -54,7 +54,7 @@ function App() {
               {/* Protected routes that require the auth token */}
               <Route path="/session" element={<Session authToken={authToken} />} />
               <Route path="/history" element={<History authToken={authToken} />} />
-              <Route path="/progress" element={<Progress />} /> 
+              <Route path="/progress" element={<Progress authToken={authToken} />} /> 
             </Routes>
           </main>
         </div>

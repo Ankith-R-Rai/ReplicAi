@@ -1,0 +1,15 @@
+[
+    {
+        "_id": {
+            "$oid": "2025-09-13T09:23:02.709046+00:00"
+        },
+        "user_id": "test-user-123",
+        "exercise_type": "squat",
+        "rep_count": 0,
+        "duration_seconds": 3,
+        "average_accuracy": 0,
+        "completion_timestamp": {
+            "$date": "2025-09-13T09:23:02.709046+00:00"
+        }
+    }
+]

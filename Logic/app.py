@@ -6,11 +6,11 @@ import numpy as np
 import cv2
 from io import BytesIO
 from PIL import Image
-from flask import Flask, jsonify, request, g
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from pymongo import MongoClient
 from bson import json_util
-from authlib.integrations.flask_oauth2 import ResourceProtector
+from authlib.integrations.flask_oauth2 import ResourceProtector, current_token
 from auth import Auth0JWTBearerTokenValidator
 from datetime import datetime
 
@@ -23,8 +23,7 @@ load_dotenv()
 # --- APP SETUP ---
 app = Flask(__name__)
 
-# --- CORS CONFIGURATION (CRUCIAL FIX) ---
-# This allows the React frontend to communicate with the backend.
+# --- CORS CONFIGURATION ---
 CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 
 
@@ -48,7 +47,7 @@ except Exception as e:
     mongo_client = None
 
 # --- ML MODEL STATE ---
-tracker = ExerciseTracker()
+tracker = None
 
 # --- HELPER FUNCTIONS ---
 def parse_json(data):
@@ -82,13 +81,16 @@ def home():
     return "ReplicAI API is running!"
 
 @app.route("/api/reset", methods=["POST"])
+@require_auth()
 def reset_tracker():
     """Resets the exercise tracker state for a new session."""
-    tracker.reset()
+    global tracker
+    tracker = ExerciseTracker()
     print("🏋️  Tracker reset for new session.")
     return jsonify({"message": "Tracker reset"}), 200
 
 @app.route("/api/analyze", methods=["POST"])
+@require_auth()
 def analyze_frame():
     """Receives a video frame, processes it, and returns analysis."""
     data = request.get_json()
@@ -116,7 +118,7 @@ def save_workout_route():
     if not mongo_client:
         return jsonify({"error": "Database connection failed"}), 500
         
-    auth0_id = g.auth_token_payload.get('sub')
+    auth0_id = current_token.get('sub')
     if not auth0_id:
         return jsonify({"error": "Unauthorized"}), 401
     
@@ -146,7 +148,7 @@ def get_workout_history_route():
     if not mongo_client:
         return jsonify({"error": "Database connection failed"}), 500
         
-    auth0_id = g.auth_token_payload.get('sub')
+    auth0_id = current_token.get('sub')
     if not auth0_id:
         return jsonify({"error": "Unauthorized"}), 401
 
@@ -160,4 +162,3 @@ def get_workout_history_route():
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
-

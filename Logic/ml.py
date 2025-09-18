@@ -19,11 +19,11 @@ else:
 
 # --- Initialize MediaPipe ---
 mp_pose = mp.solutions.pose
-pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+# FIX: The pose model will now be created on-demand in process_frame
+# pose = mp_pose.Pose(static_image_mode=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
 # --- The Upgraded Tracker with More Detailed State ---
 class ExerciseTracker:
-    # --- FIXED: Corrected the typo from init to _init_ ---
     def __init__(self):
         """Initializes the tracker's state."""
         self.reset()
@@ -339,44 +339,45 @@ def _process_lunge(landmarks, tracker):
 # --- Main Processing Function (Dispatcher) ---
 def process_frame(image, exercise_type, tracker):
     """Processes a video frame to analyze exercise form and count reps."""
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    results = pose.process(image_rgb)
-    
-    try:
-        landmarks = results.pose_landmarks.landmark
+    with mp_pose.Pose(static_image_mode=True, min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = pose.process(image_rgb)
         
-        # Dispatch to the correct exercise processor
-        if exercise_type == 'squat':
-            _process_squat(landmarks, tracker) 
-        elif exercise_type == 'bicep_curl':
-            _process_bicep_curl(landmarks, tracker)
-        elif exercise_type == 'pushup':
-            _process_pushup(landmarks, tracker)
-        elif exercise_type == 'jumping_jack':
-            _process_jumping_jack(landmarks, tracker)
-        elif exercise_type == 'lunge':
-            _process_lunge(landmarks, tracker)
-        else:
-            tracker.feedback = f"'{exercise_type}' is not implemented."
+        try:
+            landmarks = results.pose_landmarks.landmark
             
-    except AttributeError:
-        tracker.feedback = "No person detected"
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        tracker.feedback = "Error detecting pose"
-    
-    total_judged_reps = tracker.good_reps + tracker.bad_reps
-    if total_judged_reps > 0:
-        tracker.accuracy = (tracker.good_reps / total_judged_reps) * 100
-    else:
-        tracker.accuracy = 0
-    
-    return {
-        "good_reps": tracker.good_reps,
-        "bad_reps": tracker.bad_reps,
-        "uncertain_reps": tracker.uncertain_reps,
-        "feedback": tracker.feedback,
-        "angle": round(tracker.angle, 2),
-        "gemini_feedback": tracker.gemini_coach_tip,
-        "accuracy": round(tracker.accuracy, 1)
-    }
+            # Dispatch to the correct exercise processor
+            if exercise_type == 'squat':
+                _process_squat(landmarks, tracker) 
+            elif exercise_type == 'bicep_curl':
+                _process_bicep_curl(landmarks, tracker)
+            elif exercise_type == 'pushup':
+                _process_pushup(landmarks, tracker)
+            elif exercise_type == 'jumping_jack':
+                _process_jumping_jack(landmarks, tracker)
+            elif exercise_type == 'lunge':
+                _process_lunge(landmarks, tracker)
+            else:
+                tracker.feedback = f"'{exercise_type}' is not implemented."
+                
+        except AttributeError:
+            tracker.feedback = "No person detected"
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            tracker.feedback = "Error detecting pose"
+        
+        total_judged_reps = tracker.good_reps + tracker.bad_reps
+        if total_judged_reps > 0:
+            tracker.accuracy = (tracker.good_reps / total_judged_reps) * 100
+        else:
+            tracker.accuracy = 0
+        
+        return {
+            "good_reps": tracker.good_reps,
+            "bad_reps": tracker.bad_reps,
+            "uncertain_reps": tracker.uncertain_reps,
+            "feedback": tracker.feedback,
+            "angle": round(tracker.angle, 2),
+            "gemini_feedback": tracker.gemini_coach_tip,
+            "accuracy": round(tracker.accuracy, 1)
+        }

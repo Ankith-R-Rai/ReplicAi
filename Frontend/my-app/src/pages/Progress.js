@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { FaDownload } from 'react-icons/fa';
 
 function Progress({ authToken }) {
     const [sessions, setSessions] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [filter, setFilter] = useState('squat'); // Default to showing progress for squats
+    const [filter, setFilter] = useState('squat');
 
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
@@ -29,20 +30,39 @@ function Progress({ authToken }) {
         };
         fetchHistory();
     }, [authToken]);
-    
-    // This hook processes the raw session data into a format suitable for charting.
-    // It only recalculates when the session data or the filter changes.
+
     const chartData = useMemo(() => {
         return sessions
-            .filter(s => s.exercise_type === filter) // Filter by selected exercise
-            .sort((a, b) => new Date(a.completion_timestamp.$date) - new Date(b.completion_timestamp.$date)) // Sort by date
+            .filter(s => s.exercise_type === filter)
+            .sort((a, b) => new Date(a.completion_timestamp.$date) - new Date(b.completion_timestamp.$date))
             .map(s => ({
-                // Format the data points for the chart
                 date: new Date(s.completion_timestamp.$date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
                 reps: s.rep_count,
                 accuracy: s.average_accuracy,
             }));
     }, [sessions, filter]);
+
+    const handleDownload = () => {
+        if (chartData.length === 0) {
+            alert('No data to download for this exercise.');
+            return;
+        }
+
+        const headers = "Date,Exercise,Reps,Accuracy\n";
+        const csvContent = chartData.map(s =>
+            `${s.date},${filter},${s.reps},${s.accuracy}`
+        ).join('\n');
+
+        const blob = new Blob([headers + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${filter}_progress.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     if (isLoading) {
         return <div className="text-center p-8 text-white">Loading Progress Data...</div>;
@@ -52,27 +72,31 @@ function Progress({ authToken }) {
         <div>
             <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                 <h1 className="text-3xl font-semibold text-gray-200">Your Progress</h1>
-                <div className="flex items-center gap-2">
-                    <label htmlFor="progress-filter" className="text-gray-400">Exercise:</label>
-                    <select
-                        id="progress-filter"
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                        className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
-                    >
-                        <option value="squat">Squat</option>
-                        <option value="pushup">Pushup</option>
-                        <option value="bicep_curl">Bicep Curl</option>
-                        <option value="lunge">Lunge</option>
-                        <option value="jumping_jack">Jumping Jack</option>
-                    </select>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="progress-filter" className="text-gray-400">Exercise:</label>
+                        <select
+                            id="progress-filter"
+                            value={filter}
+                            onChange={(e) => setFilter(e.target.value)}
+                            className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                        >
+                            <option value="squat">Squat</option>
+                            <option value="pushup">Pushup</option>
+                            <option value="bicep_curl">Bicep Curl</option>
+                            <option value="lunge">Lunge</option>
+                            <option value="jumping_jack">Jumping Jack</option>
+                        </select>
+                    </div>
+                    <button onClick={handleDownload} className="flex items-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
+                        <FaDownload className="mr-2" />
+                        Download CSV
+                    </button>
                 </div>
             </div>
 
-            {/* Conditionally render charts or a placeholder message */}
             {chartData.length > 1 ? (
                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Reps Chart */}
                     <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
                         <h2 className="text-xl font-bold mb-4 text-white capitalize">{filter.replace(/_/g, ' ')} - Reps Over Time</h2>
                          <ResponsiveContainer width="100%" height={300}>
@@ -87,7 +111,6 @@ function Progress({ authToken }) {
                         </ResponsiveContainer>
                     </div>
 
-                    {/* Accuracy Chart */}
                     <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
                         <h2 className="text-xl font-bold mb-4 text-white capitalize">{filter.replace(/_/g, ' ')} - Accuracy Over Time</h2>
                          <ResponsiveContainer width="100%" height={300}>
@@ -113,4 +136,3 @@ function Progress({ authToken }) {
 }
 
 export default Progress;
-

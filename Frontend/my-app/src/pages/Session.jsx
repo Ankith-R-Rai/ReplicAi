@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Webcam from 'react-webcam';
 
 const StatCard = ({ label, value, colorClass = 'text-white' }) => (
   <div className="bg-gray-800 rounded-lg p-4 text-center">
@@ -21,26 +22,34 @@ function Session({ authToken }) {
   const [sessionState, setSessionState] = useState('idle'); // idle, analyzing, finished
   const [selectedExercise, setSelectedExercise] = useState('squat');
   const [startTime, setStartTime] = useState(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [repGoal, setRepGoal] = useState(10);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  const webcamRef = useRef(null);
   const intervalRef = useRef(null);
+  const lastSpokenFeedback = useRef('');
   const navigate = useNavigate();
   
   const API_BASE_URL = 'http://127.0.0.1:5000/api';
+
+  const speakFeedback = (text) => {
+    if ('speechSynthesis' in window && text && text !== lastSpokenFeedback.current) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      speechSynthesis.speak(utterance);
+      lastSpokenFeedback.current = text;
+    }
+  };
 
   const stopAnalysis = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    if (videoRef.current && videoRef.current.srcObject) {
-      const tracks = videoRef.current.srcObject.getTracks();
-      tracks.forEach(track => track.stop());
-    }
   }, []);
 
   const handleSaveWorkout = async () => {
+    setIsSaving(true);
     const duration_seconds = startTime ? Math.floor((new Date() - startTime) / 1000) : 0;
     
     const workoutData = {
@@ -54,6 +63,7 @@ function Session({ authToken }) {
       if (!authToken) {
         console.error("Auth token not available.");
         alert('You must be logged in to save a workout!');
+        setIsSaving(false);
         return;
       }
         
@@ -69,69 +79,90 @@ function Session({ authToken }) {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       console.log('Workout saved successfully!');
-      // Navigate to the progress page after saving
       navigate('/progress');
       
     } catch (error) {
       console.error('Failed to save workout:', error);
       alert('Failed to save workout. Please try again.');
+      setIsSaving(false);
     }
   };
 
-  const handleStopSession = useCallback(() => {
+  const handleStopSession = useCallback((message = 'Session complete! Great workout.') => {
     stopAnalysis();
     setSessionState('finished');
-    setFeedback('Session complete! Great workout.');
+    setFeedback(message);
+    speakFeedback(message);
   }, [stopAnalysis]);
 
 
   const sendFrameForAnalysis = useCallback(async () => {
-    if (videoRef.current && canvasRef.current && videoRef.current.readyState === 4) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      const imageSrc = canvas.toDataURL('image/jpeg');
+    if (webcamRef.current && webcamRef.current.getScreenshot && authToken) {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) {
+        return;
+      }
 
       try {
         const response = await fetch(`${API_BASE_URL}/analyze`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+          },
           body: JSON.stringify({ image: imageSrc, exercise: selectedExercise }),
         });
 
-        if (!response.ok) throw new Error('Network response was not ok');
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
         const data = await response.json();
+
+        speakFeedback(data.feedback);
 
         setRepCounts({ good: data.good_reps, bad: data.bad_reps, uncertain: data.uncertain_reps });
         setFeedback(data.feedback);
         setAccuracy(data.accuracy);
+        
+        if (data.good_reps >= repGoal) {
+          handleStopSession(`Goal of ${repGoal} reps reached! Well done!`);
+        }
+
       } catch (error) {
         console.error("Error sending frame:", error);
         setFeedback('Error connecting to AI server.');
-        handleStopSession();
+        handleStopSession('Connection to server lost.');
       }
     }
-  }, [selectedExercise, handleStopSession]);
+  }, [selectedExercise, handleStopSession, repGoal, authToken]);
 
   const startAnalysis = async () => {
+    if (!authToken) {
+      alert("You must be logged in to start a session.");
+      return;
+    }
     try {
-      await fetch(`${API_BASE_URL}/reset`, { method: 'POST' });
+      const response = await fetch(`${API_BASE_URL}/reset`, { 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+      
       setRepCounts({ good: 0, bad: 0, uncertain: 0 });
       setAccuracy(0);
       setSessionState('analyzing');
       setFeedback('Analysis started!');
       setStartTime(new Date());
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current) videoRef.current.srcObject = stream;
-
       intervalRef.current = setInterval(sendFrameForAnalysis, 200);
     } catch (err) {
-      console.error("Error accessing webcam: ", err);
-      setFeedback("Please enable webcam access to start a session.");
+      console.error("Error starting analysis: ", err);
+      setFeedback("Could not start the analysis session.");
     }
   };
 
@@ -154,13 +185,13 @@ function Session({ authToken }) {
             </div>
             <p className="text-2xl text-gray-300">Final Accuracy: {accuracy}%</p>
           </div>
-          {/* NEW: Save and Discard Buttons */}
           <div className="flex gap-4 mt-8">
             <button
               onClick={handleSaveWorkout}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg"
+              disabled={isSaving}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg disabled:bg-gray-500 disabled:cursor-not-allowed"
             >
-              Save & View Progress
+              {isSaving ? 'Saving...' : 'Save & View Progress'}
             </button>
             <button
               onClick={() => navigate('/')}
@@ -175,6 +206,15 @@ function Session({ authToken }) {
           <div className="flex flex-col md:flex-row justify-between items-center mb-6">
             <h1 className="text-3xl font-semibold">Live Analysis Session</h1>
             <div className="flex items-center gap-4 mt-4 md:mt-0">
+               <label htmlFor="rep-goal" className="font-medium">Goal:</label>
+              <input 
+                type="number"
+                id="rep-goal"
+                value={repGoal}
+                onChange={(e) => setRepGoal(Math.max(1, parseInt(e.target.value) || 1))}
+                disabled={sessionState === 'analyzing'}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 w-20"
+              />
               <label htmlFor="exercise" className="font-medium">Exercise:</label>
               <select
                 id="exercise"
@@ -193,8 +233,14 @@ function Session({ authToken }) {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-black rounded-lg flex items-center justify-center min-h-[70vh] shadow-lg">
-              <video ref={videoRef} autoPlay playsInline muted style={{ transform: 'scaleX(-1)' }} className="w-full h-full object-cover rounded-lg"/>
-              <canvas ref={canvasRef} className="hidden" />
+              <Webcam
+                ref={webcamRef}
+                audio={false}
+                mirrored={true}
+                onUserMedia={() => setIsCameraReady(true)}
+                onUserMediaError={() => setFeedback("Camera access denied. Please allow camera access in your browser settings.")}
+                className="w-full h-full object-cover rounded-lg"
+              />
             </div>
             <div className="flex flex-col gap-6">
               <div className="bg-gray-800 rounded-lg p-4 flex flex-col items-center justify-center h-full">
@@ -207,12 +253,22 @@ function Session({ authToken }) {
               <StatCard label="Bad Reps" value={repCounts.bad} colorClass="text-red-500" />
               <StatCard label="Uncertain" value={repCounts.uncertain} colorClass="text-yellow-500" />
               <div className="bg-gray-800 rounded-lg p-6 text-center">
+                {/* Goal Progress Bar */}
+                <div className="mb-4">
+                  <div className="flex justify-between text-sm text-gray-400 mb-1">
+                    <span>Progress to Goal</span>
+                    <span>{repCounts.good} / {repGoal}</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2.5">
+                    <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${(repCounts.good / repGoal) * 100}%` }}></div>
+                  </div>
+                </div>
                 <p className="text-sm text-gray-400 font-medium uppercase tracking-wider mb-2">Live Feedback</p>
                 <p className="text-lg italic text-white h-12 flex items-center justify-center">{feedback}</p>
               </div>
               <div className="flex gap-4">
-                <button onClick={startAnalysis} disabled={sessionState === 'analyzing'} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed">Start</button>
-                <button onClick={handleStopSession} disabled={sessionState !== 'analyzing'} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed">Stop</button>
+                <button onClick={startAnalysis} disabled={sessionState === 'analyzing' || !isCameraReady} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed">Start</button>
+                <button onClick={() => handleStopSession()} disabled={sessionState !== 'analyzing'} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed">Stop</button>
               </div>
             </div>
           </div>

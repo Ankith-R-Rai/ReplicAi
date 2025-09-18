@@ -1,65 +1,26 @@
+# Logic/auth.py
+
+import os
 import requests
-from authlib.jose import jwt, JsonWebKey
-from authlib.oauth2.rfc6750 import BearerTokenValidator
+from authlib.integrations.flask_oauth2 import ResourceProtector
+from authlib.oauth2.rfc7523 import JWTBearerTokenValidator
+from authlib.jose.jwk import JsonWebKey
 
-class Auth0JWTBearerTokenValidator(BearerTokenValidator):
-    def __init__(self, domain: str, audience: str):
-        super(Auth0JWTBearerTokenValidator, self).__init__()
-        self.issuer = f"https://{domain}/"
-        self.audience = audience
-        self.jwks_url = f"https://{domain}/.well-known/jwks.json"
-        self._key_cache = {}
-
-    def fetch_jwks(self):
-        """Fetches and caches the JSON Web Key Set from Auth0."""
-        # Use a simple cache to avoid fetching keys on every request
-        if not self._key_cache:
-            jwks = requests.get(self.jwks_url).json()
-            for key in jwks['keys']:
-                self._key_cache[key['kid']] = key
-        return self._key_cache
-
-    def authenticate_token(self, token_string: str):
-        """
-        Validates the token against Auth0's public keys.
-        This method is required by the parent BearerTokenValidator class.
-        """
+class Auth0JWTBearerTokenValidator(JWTBearerTokenValidator):
+    def __init__(self, domain, audience):
+        issuer = f"https://{domain}/"
+        jwks_url = f"{issuer}.well-known/jwks.json"
+        
         try:
-            # Get the unverified header to find the Key ID (kid)
-            header = jwt.get_unverified_header(token_string)
-            kid = header.get('kid')
-            if not kid:
-                return None # Token is malformed
-
-            # Fetch the JWKS and find the correct public key
-            jwks = self.fetch_jwks()
-            public_key_data = jwks.get(kid)
-            if not public_key_data:
-                # If the key is not found, it might be outdated. Clear cache and retry once.
-                self._key_cache = {}
-                jwks = self.fetch_jwks()
-                public_key_data = jwks.get(kid)
-                if not public_key_data:
-                    return None # Key still not found
-
-            # Construct the key from the JWKS data
-            public_key = JsonWebKey.import_key(public_key_data)
-
-            # Define the claims options for validation
-            claims_options = {
-                "exp": {"essential": True},
-                "aud": {"essential": True, "value": self.audience},
-                "iss": {"essential": True, "value": self.issuer},
-            }
-            
-            # Decode and validate the token's claims
-            claims = jwt.decode(
-                token_string,
-                public_key,
-                claims_options=claims_options,
-            )
-            claims.validate()
-            return claims
+            jwks = requests.get(jwks_url).json()
+            public_key = JsonWebKey.import_key_set(jwks)
         except Exception as e:
-            print(f"Token validation error: {e}")
-            return None
+            print(f"Failed to load public key from {jwks_url}: {e}")
+            public_key = None
+            
+        super(Auth0JWTBearerTokenValidator, self).__init__(public_key)
+        self.claims_options = {
+            "exp": {"essential": True},
+            "aud": {"essential": True, "value": audience},
+            "iss": {"essential": True, "value": issuer},
+        }
